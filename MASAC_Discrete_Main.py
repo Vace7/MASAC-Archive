@@ -3,6 +3,7 @@ from MASAC_Discrete import MASACAgent, MASACReplayBuffer
 from MASAC_Discrete_Config import *
 from datetime import datetime
 from collections import deque
+import random
 
 if __name__ == '__main__':
     env = MultiFactoryEnv()
@@ -43,7 +44,10 @@ if __name__ == '__main__':
         total_storage_cost = 0
         now = datetime.now()
         while not done:
-            actions = agent.select_action(observation, deterministic)
+            if learning_started:
+                actions = agent.select_action(observation, deterministic)
+            else:
+                actions = [random.randint(0,4) for _ in range(8)]
             observation_, reward, done, info = env.step(actions)
             revenue, energy_cost, storage_cost = info
             reward = reward[0]
@@ -60,16 +64,17 @@ if __name__ == '__main__':
                 done
             )
             if not load_checkpoint and buffer.ready():
-                if not learning_started:
-                    learning_started = True
-                    print("Buffer ready, beginning optimisation.")
-                pi_losses, q_losses, alpha = agent.train(buffer.sample_batch())
+                if e>=learning_starts:
+                    if not learning_started:
+                        learning_started = True
+                        print("Buffer ready, beginning optimisation.")
+                    pi_losses, q_losses, alpha = agent.train(buffer.sample_batch())
             observation = observation_
 
         ep_rewards.append(total_reward)
         episode_reward_mean = sum(ep_rewards)/len(ep_rewards)
         episode_reward_max = max(ep_rewards)
-        if not load_checkpoint and learning_started:
+        if not load_checkpoint:
             if verbose:
                 stats = {
                     "episode_reward":        total_reward,

@@ -115,24 +115,26 @@ class MASACAgent:
         self.autotune = autotune
         self.utd_ratio = utd_ratio
 
-        if autotune:
-            self.target_entropy = -tf.reduce_prod(n_actions).numpy()
-            self.log_alpha = tf.Variable(0, dtype=tf.float32, trainable=True)
-            self.alpha_optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
-            self.alpha = tf.Variable(initial_value=tf.exp(self.log_alpha), trainable=False, dtype=tf.float32)
-        else:
-            self.alpha = alpha
-
         # if autotune:
-        #     # Create separate target entropy and alpha for each agent
-        #     self.target_entropy = [-tf.reduce_prod(n_actions).numpy() for _ in range(n_agents)]
-        #     self.log_alphas = [tf.Variable(0, dtype=tf.float32, trainable=True) for _ in range(n_agents)]
-        #     self.alpha_optimizers = [tf.keras.optimizers.Adam(learning_rate=lr) for _ in range(n_agents)]
-        #     self.alphas = [tf.Variable(initial_value=tf.exp(log_alpha), trainable=False, dtype=tf.float32) 
-        #                 for log_alpha in self.log_alphas]
+        #     self.target_entropy = -tf.reduce_prod(n_actions).numpy()
+        #     self.log_alpha = tf.Variable(0, dtype=tf.float32, trainable=True)
+        #     self.alpha_optimizer = tf.keras.optimizers.AdamW(learning_rate=lr)
+        #     self.alpha = tf.Variable(initial_value=tf.exp(self.log_alpha), trainable=False, dtype=tf.float32)
         # else:
-        #     # If not autotuning, still create separate alphas for each agent
-        #     self.alphas = [alpha for _ in range(n_agents)]
+        #     self.alpha = alpha
+
+        # ---------------------Claude---------------------
+        if autotune:
+            # Create separate target entropy and alpha for each agent
+            self.target_entropy = [-tf.reduce_prod(n_actions).numpy() for _ in range(n_agents)]
+            self.log_alphas = [tf.Variable(0, dtype=tf.float32, trainable=True) for _ in range(n_agents)]
+            self.alpha_optimizers = [tf.keras.optimizers.AdamW(learning_rate=lr) for _ in range(n_agents)]
+            self.alphas = [tf.Variable(initial_value=tf.exp(log_alpha), trainable=False, dtype=tf.float32) 
+                        for log_alpha in self.log_alphas]
+        else:
+            # If not autotuning, still create separate alphas for each agent
+            self.alphas = [alpha for _ in range(n_agents)]
+        # ------------------------------------------------
 
         # Actor-Critic setup
         self.actors = [Actor(n_actions=n_actions, hidden_sizes=actor_hidden_sizes) for _ in range(n_agents)]
@@ -140,9 +142,9 @@ class MASACAgent:
         self.target_critic = Critic(n_actions=n_actions, n_agents=n_agents, hidden_sizes=critic_hidden_sizes, use_layer_norm=use_layer_norm)
 
         # Optimizers
-        self.pi_optimizers = [tf.keras.optimizers.Adam(learning_rate=lr) for _ in range(n_agents)]
-        self.q1_optimizers = tf.keras.optimizers.Adam(learning_rate=lr)
-        self.q2_optimizers = tf.keras.optimizers.Adam(learning_rate=lr)
+        self.pi_optimizers = [tf.keras.optimizers.AdamW(learning_rate=lr) for _ in range(n_agents)]
+        self.q1_optimizers = tf.keras.optimizers.AdamW(learning_rate=lr)
+        self.q2_optimizers = tf.keras.optimizers.AdamW(learning_rate=lr)
 
         # Initialize networks with dummy inputs
         dummy_obs = tf.keras.Input(shape=(obs_dims,), dtype=tf.float32)
@@ -207,11 +209,7 @@ class MASACAgent:
         logp_pi = tf.concat(logp_pi_list, axis=-1)
         pi_next = tf.concat(pi_next_list, axis=-1)
         logp_pi_next = tf.concat(logp_pi_next_list, axis=-1)
-        
-        # # ---------------------Claude---------------------
-        # logp_pi_next = tf.stack(logp_pi_next_list, axis=1)  # [batch_size, n_agents, n_actions]
-        # pi_next = tf.stack(pi_next_list, axis=1)  # [batch_size, n_agents, n_actions]
-        # # ------------------------------------------------
+
         for _ in range(self.utd_ratio):
             with tf.GradientTape(persistent=True) as tape:
                 # Get Q values from the critic
@@ -220,33 +218,8 @@ class MASACAgent:
                 # Bellman backup for Q functions
                 target_q1, target_q2 = self.target_critic(all_next_obs)
                 target_min_q = tf.minimum(target_q1, target_q2)
-
-                # # ---------------------Claude---------------------
-                # target_q1 = tf.reshape(target_q1, [-1, self.n_agents, self.n_actions])
-                # target_q2 = tf.reshape(target_q2, [-1, self.n_agents, self.n_actions])
-                # target_min_q = tf.minimum(target_q1, target_q2)
-
-                # # Convert alphas to tensor and reshape for broadcasting
-                # alphas_tensor = tf.convert_to_tensor(self.alphas)  # [n_agents]
-                # alphas_tensor = tf.reshape(alphas_tensor, [1, self.n_agents, 1])  # [1, n_agents, 1]
-
-                # # Compute entropy term per agent
-                # entropy_term = alphas_tensor * logp_pi_next  # [batch_size, n_agents, n_actions]
-
-                # # Compute per-agent soft Q-values
-                # agent_soft_q = target_min_q - entropy_term  # [batch_size, n_agents, n_actions]
-
-                # # Weight by policy and sum over actions for each agent
-                # agent_values = tf.reduce_sum(pi_next * agent_soft_q, axis=-1)  # [batch_size, n_agents]
-
-                # # Average over agents for the final target
-                # min_qf_next_target = tf.reduce_mean(agent_values, axis=1)  # [batch_size]
-
-                # # Complete Bellman backup
-                # q_backup = tf.stop_gradient(rews + self.gamma * (1 - dones) * min_qf_next_target)
-                # # ------------------------------------------------
-
-                min_qf_next_target = tf.reduce_sum(pi_next * (target_min_q - self.alpha * logp_pi_next), axis=1)
+                min_qf_next_target = tf.reduce_sum(pi_next * (target_min_q - tf.reduce_mean(self.alphas) * logp_pi_next), axis=1)
+                # min_qf_next_target = tf.reduce_sum(pi_next * (target_min_q - self.alpha * logp_pi_next), axis=1)
                 q_backup = tf.stop_gradient(rews + self.gamma * (1 - dones) * min_qf_next_target)
 
                 # Calculate Q values for the taken actions
@@ -268,61 +241,28 @@ class MASACAgent:
             
             del tape
 
-        # # ---------------------Claude---------------------
-        # # Update alpha for each agent separately
-        # if self.autotune:
-        #     alpha_losses = []
-        #     for agent_id in range(self.n_agents):
-        #         with tf.GradientTape() as alpha_tape:
-        #             # Get this agent's log probs
-        #             logp_pi = logp_pi_list[agent_id]
-        #             # Compute alpha loss for this agent
-        #             alpha_loss = -tf.exp(self.log_alphas[agent_id]) * (
-        #                 tf.reduce_mean(logp_pi) + self.target_entropy[agent_id]
-        #             )
-        #             alpha_losses.append(alpha_loss)
-                
-        #         # Update this agent's alpha
-        #         alpha_grads = alpha_tape.gradient(alpha_loss, [self.log_alphas[agent_id]])
-        #         self.alpha_optimizers[agent_id].apply_gradients(
-        #             zip(alpha_grads, [self.log_alphas[agent_id]])
-        #         )
-        #         self.alphas[agent_id].assign(tf.exp(self.log_alphas[agent_id]))
-
-        # # Update policies using agent-specific alphas
-        # pi_losses = []
-        # for agent_id in range(self.n_agents):
-        #     with tf.GradientTape() as tape:
-        #         pi, logp_pi = self.actors[agent_id](batch['obs'][agent_id])
-        #         q1_all_agents, q2_all_agents = self.critic(all_obs)
-        #         q1_all_agents = tf.reshape(q1_all_agents, [tf.shape(q1_all_agents)[0], self.n_agents, -1])
-        #         q2_all_agents = tf.reshape(q2_all_agents, [tf.shape(q2_all_agents)[0], self.n_agents, -1])
-
-        #         q1_values_curr_agent = q1_all_agents[:, agent_id, :]
-        #         q2_values_curr_agent = q2_all_agents[:, agent_id, :]
-        #         min_q_pi = tf.minimum(q1_values_curr_agent, q2_values_curr_agent)
-
-        #         # Use agent-specific alpha
-        #         pi_loss = tf.reduce_mean(tf.reduce_sum(pi * (
-        #             self.alphas[agent_id] * logp_pi - min_q_pi), axis=1))
-
-        #     pi_gradients = tape.gradient(pi_loss, self.actors[agent_id].trainable_variables)
-        #     self.pi_optimizers[agent_id].apply_gradients(zip(pi_gradients, self.actors[agent_id].trainable_variables))
-
-        #     pi_losses.append(pi_loss)
-
-        # return sum(pi_losses)/len(pi_losses), q1_loss + q2_loss, tf.reduce_mean(self.alphas)
-        # # ------------------------------------------------
-
-        # Update alpha
+        # ---------------------Claude---------------------
+        # Update alpha for each agent separately
         if self.autotune:
-            with tf.GradientTape() as alpha_tape:
-                alpha_loss = -tf.exp(self.log_alpha) * (tf.reduce_mean(logp_pi) + self.target_entropy)
-            
-            alpha_grads = alpha_tape.gradient(alpha_loss, [self.log_alpha])
-            self.alpha_optimizer.apply_gradients(zip(alpha_grads, [self.log_alpha]))
-            self.alpha.assign(tf.exp(self.log_alpha))
+            alpha_losses = []
+            for agent_id in range(self.n_agents):
+                with tf.GradientTape() as alpha_tape:
+                    # Get this agent's log probs
+                    logp_pi = logp_pi_list[agent_id]
+                    # Compute alpha loss for this agent
+                    alpha_loss = -tf.exp(self.log_alphas[agent_id]) * (
+                        tf.reduce_mean(logp_pi) + self.target_entropy[agent_id]
+                    )
+                    alpha_losses.append(alpha_loss)
+                
+                # Update this agent's alpha
+                alpha_grads = alpha_tape.gradient(alpha_loss, [self.log_alphas[agent_id]])
+                self.alpha_optimizers[agent_id].apply_gradients(
+                    zip(alpha_grads, [self.log_alphas[agent_id]])
+                )
+                self.alphas[agent_id].assign(tf.exp(self.log_alphas[agent_id]))
 
+        # Update policies using agent-specific alphas
         pi_losses = []
         for agent_id in range(self.n_agents):
             with tf.GradientTape() as tape:
@@ -335,11 +275,44 @@ class MASACAgent:
                 q2_values_curr_agent = q2_all_agents[:, agent_id, :]
                 min_q_pi = tf.minimum(q1_values_curr_agent, q2_values_curr_agent)
 
-                pi_loss = tf.reduce_mean(tf.reduce_sum(pi * (self.alpha * logp_pi - min_q_pi), axis=1))
+                # Use agent-specific alpha
+                pi_loss = tf.reduce_mean(tf.reduce_sum(pi * (
+                    self.alphas[agent_id] * logp_pi - min_q_pi), axis=1))
 
             pi_gradients = tape.gradient(pi_loss, self.actors[agent_id].trainable_variables)
             self.pi_optimizers[agent_id].apply_gradients(zip(pi_gradients, self.actors[agent_id].trainable_variables))
 
             pi_losses.append(pi_loss)
 
-        return sum(pi_losses)/len(pi_losses), q1_loss + q2_loss, self.alpha
+        return sum(pi_losses)/len(pi_losses), q1_loss + q2_loss, tf.reduce_mean(self.alphas)
+        # ------------------------------------------------
+
+        # # Update alpha
+        # if self.autotune:
+        #     with tf.GradientTape() as alpha_tape:
+        #         alpha_loss = -tf.exp(self.log_alpha) * (tf.reduce_mean(logp_pi) + self.target_entropy)
+            
+        #     alpha_grads = alpha_tape.gradient(alpha_loss, [self.log_alpha])
+        #     self.alpha_optimizer.apply_gradients(zip(alpha_grads, [self.log_alpha]))
+        #     self.alpha.assign(tf.exp(self.log_alpha))
+
+        # pi_losses = []
+        # for agent_id in range(self.n_agents):
+        #     with tf.GradientTape() as tape:
+        #         pi, logp_pi = self.actors[agent_id](batch['obs'][agent_id])
+        #         q1_all_agents, q2_all_agents = self.critic(all_obs)
+        #         q1_all_agents = tf.reshape(q1_all_agents, [tf.shape(q1_all_agents)[0], self.n_agents, -1])
+        #         q2_all_agents = tf.reshape(q2_all_agents, [tf.shape(q2_all_agents)[0], self.n_agents, -1])
+
+        #         q1_values_curr_agent = q1_all_agents[:, agent_id, :]
+        #         q2_values_curr_agent = q2_all_agents[:, agent_id, :]
+        #         min_q_pi = tf.minimum(q1_values_curr_agent, q2_values_curr_agent)
+
+        #         pi_loss = tf.reduce_mean(tf.reduce_sum(pi * (self.alpha * logp_pi - min_q_pi), axis=1))
+
+        #     pi_gradients = tape.gradient(pi_loss, self.actors[agent_id].trainable_variables)
+        #     self.pi_optimizers[agent_id].apply_gradients(zip(pi_gradients, self.actors[agent_id].trainable_variables))
+
+        #     pi_losses.append(pi_loss)
+
+        # return sum(pi_losses)/len(pi_losses), q1_loss + q2_loss, self.alpha

@@ -6,7 +6,7 @@ if load_checkpoint:
     verbose = False
     deterministic = True
 else:
-    n_episodes = 300
+    n_episodes = 100
     verbose = True
     deterministic = False
     

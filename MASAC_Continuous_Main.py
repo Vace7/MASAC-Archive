@@ -3,9 +3,9 @@ from factory_sim.multi_factory_env_MA import MultiFactoryEnv
 # from MASAC_not_working import MASACAgent, MASACReplayBuffer  # Not working due to lack of accounting for inter-agent dependencies
 # from MASAC_claude_1 import MASACAgent, MASACReplayBuffer  # Accounts for inter-agent action dependencies
 # from MASAC_claude_2 import MASACAgent, MASACReplayBuffer  # Improves by using multi-headed q structure for fast computation
-from MASAC_claude_3 import MASACAgent, MASACReplayBuffer  # Improves by using multiple alphas to vary exploration between actors
+from MASAC_Continuous import MASACAgent, MASACReplayBuffer  # Improves by using multiple alphas to vary exploration between actors
 # from MASAC_multicritic import MASACAgent, MASACReplayBuffer  # Uses multiple critics, not very effective
-from MASAC_Config import *
+from MASAC_Continuous_Config import *
 from datetime import datetime
 from collections import deque
 
