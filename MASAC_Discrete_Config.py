@@ -16,9 +16,9 @@ polyak = 0.995                  # Polyak parameter for the weights copy
 lr = 3e-4                        # Learning rate for the networks
 gamma = 0.99                    # Discount factor
 autotune = True                 # Select autotuning of alpha
-utd_ratio = 1                  # Number of times to update critic network per timestep
-use_layer_norm = False
-name = f"MASAC-Discrete-{lr}-no_layernorm-AdamW"
+utd_ratio = 20                  # Number of times to update critic network per timestep
+use_layer_norm = True
+name = f"MASAC-Discrete-{lr}-layernorm-AdamW"
 
 # MLP PARAMETERS #
 critic_hidden_sizes = (256,128)          # Number of the hidden layers for the critics

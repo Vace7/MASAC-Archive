@@ -79,7 +79,7 @@ class Q_network(Model):
     def __init__(self, n_actions, n_agents, hidden_sizes=(256, 256), activation=tf.nn.relu, use_layer_norm=False):
         super(Q_network, self).__init__()
         self.use_layer_norm = use_layer_norm
-        self.hidden_layers = [Dense(size, activation='relu') for size in hidden_sizes]
+        self.hidden_layers = [Dense(size, activation=None) for size in hidden_sizes]
         self.activation = activation
         self.q_value_layer = Dense(n_actions*n_agents, activation=None)
         if self.use_layer_norm:
