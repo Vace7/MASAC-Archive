@@ -4,6 +4,14 @@ import datetime
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Dense, LayerNormalization
 
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+    try:
+        tf.config.experimental.set_memory_growth(gpus[0], True)
+        tf.config.experimental.set_visible_devices(gpus[0], 'GPU')
+    except RuntimeError as e:
+        print(e)
+
 class MASACReplayBuffer:
     def __init__(self, obs_dims, size, n_agents, batch_size):
         self.n_agents = n_agents
@@ -188,7 +196,7 @@ class MASACAgent:
         self.target_critic(dummy_obs)
         self.update_network_parameters(self.critic.variables, self.target_critic.variables, tau=1.0)
         self.episodes = 0
-        
+
     def log_episode(self, stats):
         """Log statistics."""
         with self.logger.as_default():
