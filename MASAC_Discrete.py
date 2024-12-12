@@ -158,6 +158,36 @@ class MASACAgent:
         if verbose:
             log_dir = f"../logs/{self.name}-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}"
             self.logger = tf.summary.create_file_writer(log_dir)
+    
+    def reset_weights(self, autotune, n_actions, n_agents, alpha, lr, actor_hidden_sizes, critic_hidden_sizes, obs_dims, use_layer_norm):
+        if autotune:
+            # Create separate target entropy and alpha for each agent
+            self.target_entropy = [-tf.reduce_prod(n_actions).numpy() for _ in range(n_agents)]
+            self.log_alphas = [tf.Variable(0, dtype=tf.float32, trainable=True) for _ in range(n_agents)]
+            self.alpha_optimizers = [tf.keras.optimizers.AdamW(learning_rate=lr) for _ in range(n_agents)]
+            self.alphas = [tf.Variable(initial_value=tf.exp(log_alpha), trainable=False, dtype=tf.float32) 
+                        for log_alpha in self.log_alphas]
+        else:
+            # If not autotuning, still create separate alphas for each agent
+            self.alphas = [alpha for _ in range(n_agents)]
+        # ------------------------------------------------
+
+        # Actor-Critic setup
+        self.actors = [Actor(n_actions=n_actions, hidden_sizes=actor_hidden_sizes) for _ in range(n_agents)]
+        self.critic = Critic(n_actions=n_actions, n_agents=n_agents, hidden_sizes=critic_hidden_sizes, use_layer_norm=use_layer_norm)
+        self.target_critic = Critic(n_actions=n_actions, n_agents=n_agents, hidden_sizes=critic_hidden_sizes, use_layer_norm=use_layer_norm)
+
+        # Optimizers
+        self.pi_optimizers = [tf.keras.optimizers.AdamW(learning_rate=lr) for _ in range(n_agents)]
+        self.q1_optimizers = tf.keras.optimizers.AdamW(learning_rate=lr)
+        self.q2_optimizers = tf.keras.optimizers.AdamW(learning_rate=lr)
+
+        # Initialize networks with dummy inputs
+        dummy_obs = tf.keras.Input(shape=(obs_dims,), dtype=tf.float32)
+        self.critic(dummy_obs)
+        self.target_critic(dummy_obs)
+        self.update_network_parameters(self.critic.variables, self.target_critic.variables, tau=1.0)
+        self.episodes = 0
         
     def log_episode(self, stats):
         """Log statistics."""
