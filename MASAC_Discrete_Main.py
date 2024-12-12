@@ -25,7 +25,7 @@ if __name__ == '__main__':
         use_layer_norm=use_layer_norm,
         verbose=verbose, 
         name=name)
-    for _ in range(2):
+    for _ in range(20):
         agent.reset_weights(autotune, n_actions, n_agents, alpha, lr, actor_hidden_sizes, critic_hidden_sizes, sum(input_dims), use_layer_norm)
         buffer = MASACReplayBuffer(
             obs_dims=input_dims,
