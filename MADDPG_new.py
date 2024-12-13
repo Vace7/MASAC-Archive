@@ -4,6 +4,14 @@ import random
 import datetime
 from tensorflow.keras import layers, Model
 
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+    try:
+        tf.config.experimental.set_memory_growth(gpus[0], True)
+        tf.config.experimental.set_visible_devices(gpus[0], 'GPU')
+    except RuntimeError as e:
+        print(e)
+
 class ReplayBuffer:
     def __init__(self, buffer_size, batch_size):
         self.buffer_size = buffer_size
@@ -78,6 +86,8 @@ class MADDPGAgent:
         self.num_agents = num_agents
         self.tau = tau    # Target network update rate
         self.gamma = gamma # Discount factor
+        self.lr = lr
+        self.obs_dim = obs_dim
 
         # Initialize actor and critic networks for each agent
         self.actors = [Actor(num_actions) for _ in range(num_agents)]
@@ -112,6 +122,43 @@ class MADDPGAgent:
             self.target_critics[i](dummy_full_state, dummy_actions)
             self.update_network_parameters(self.actors[i], self.target_actors[i], 1.0)
             self.update_network_parameters(self.critics[i], self.target_critics[i], 1.0)
+
+    def reset_weights(self):
+        # Initialize actor and critic networks for each agent
+        self.actors = [Actor(self.num_actions) for _ in range(self.num_agents)]
+        self.critics = [Critic() for _ in range(self.num_agents)]
+
+        # Initialize target networks
+        self.target_actors = [Actor(self.num_actions) for _ in range(self.num_agents)]
+        self.target_critics = [Critic() for _ in range(self.num_agents)]
+
+        # Initialize optimizers
+        self.actor_optimizers = [tf.keras.optimizers.Adam(learning_rate=self.lr) for _ in range(self.num_agents)]
+        self.critic_optimizers = [tf.keras.optimizers.Adam(learning_rate=self.lr) for _ in range(self.num_agents)]
+
+        self.episodes = 0
+
+        for i in range(self.num_agents):
+            dummy_state = tf.zeros((1, self.obs_dim[i]))
+            dummy_full_state = tf.zeros((1, sum(self.obs_dim)))
+            dummy_actions = tf.zeros((1, self.num_agents*self.num_actions))
+            
+            # Initialize actor networks
+            self.actors[i](dummy_state)
+            self.target_actors[i](dummy_state)
+            
+            # Initialize critic networks
+            self.critics[i](dummy_full_state, dummy_actions)
+            self.target_critics[i](dummy_full_state, dummy_actions)
+            self.update_network_parameters(self.actors[i], self.target_actors[i], 1.0)
+            self.update_network_parameters(self.critics[i], self.target_critics[i], 1.0)
+        
+        # Clear TensorFlow's memory
+        tf.keras.backend.clear_session()
+        
+        # Force garbage collection
+        import gc
+        gc.collect()
 
     def select_action(self, state, agent_index, explore=True, epsilon=0.1):
         # Convert state to tensor for the model

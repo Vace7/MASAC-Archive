@@ -197,6 +197,13 @@ class MASACAgent:
         self.update_network_parameters(self.critic.variables, self.target_critic.variables, tau=1.0)
         self.episodes = 0
 
+        # Clear TensorFlow's memory
+        tf.keras.backend.clear_session()
+        
+        # Force garbage collection
+        import gc
+        gc.collect()
+
     def log_episode(self, stats):
         """Log statistics."""
         with self.logger.as_default():
