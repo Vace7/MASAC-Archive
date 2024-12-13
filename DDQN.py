@@ -121,10 +121,13 @@ class DDQNAgent:
         """Agent Initialisation"""
         self.n_agents = n_agents
         self.n_actions = n_actions
+        self.obs_dims = obs_dims
         self.gamma = gamma
         self.polyak = polyak
+        self.lr = lr
         self.update_frequency = 100
         self.update_step = 0
+        self.hidden_sizes = hidden_sizes
         self.critics = []
         self.target_critics = []
         self.q_optimizers = []
@@ -144,6 +147,28 @@ class DDQNAgent:
             log_dir = f"../logs/{self.name}-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}"
             self.logger = tf.summary.create_file_writer(log_dir)
     
+    def reset_weights(self):
+        self.critics = []
+        self.target_critics = []
+        self.q_optimizers = []
+        for i in range(self.n_agents):
+            self.critics.append(Q_network(n_actions=self.n_actions, hidden_sizes=self.hidden_sizes))
+            self.target_critics.append(Q_network(n_actions=self.n_actions, hidden_sizes=self.hidden_sizes))
+            self.q_optimizers.append(tf.keras.optimizers.Adam(learning_rate=self.lr))
+            dummy_obs = tf.keras.Input(shape=(self.obs_dims[i],), dtype=tf.float32)
+            self.critics[i](dummy_obs)
+            self.target_critics[i](dummy_obs)
+            self.update_network_parameters(self.critics[i].variables, self.target_critics[i].variables, tau=1.0)
+
+         # Logging
+        self.episodes = 0
+        # Clear TensorFlow's memory
+        tf.keras.backend.clear_session()
+        
+        # Force garbage collection
+        import gc
+        gc.collect()
+
     def log_episode(self, stats):
         """Log statistics."""
         with self.logger.as_default():
