@@ -3,6 +3,7 @@ from MADDPG_new import MADDPGAgent, ReplayBuffer
 from MADDPG_new_Config import *
 from datetime import datetime
 from collections import deque
+import csv
 
 if __name__ == '__main__':
     # Initialize environment (assuming similar to your factory environment)
@@ -23,21 +24,23 @@ if __name__ == '__main__':
         name=name,
         verbose=verbose
     )
-    for _ in range(20):
-        agent.reset_weights()
-        epsilon = 1
-        
-        # Initialize replay buffer
-        buffer = ReplayBuffer(
-            buffer_size=max_size,
-            batch_size=batch_size
-        )
-        
-        # Training metrics
-        ep_rewards = deque(maxlen=20)
-        learning_started = False
-        
-        # Training loop
+    
+    epsilon = 1
+    
+    # Initialize replay buffer
+    buffer = ReplayBuffer(
+        buffer_size=max_size,
+        batch_size=batch_size
+    )
+    
+    # Training metrics
+    ep_rewards = deque(maxlen=20)
+    learning_started = False
+    
+    # Training loop
+    with open("../tracking/"+name+"_"+datetime.now().strftime('%Y%m%d-%H%M%S')+'.csv') as csv_file:
+        writer = csv.writer(csv_file, delimiter=',')
+        writer.writerow(('Step', 'Reward', 'Revenue', 'Energy Cost', 'Storage Cost'))
         for e in range(n_episodes):
             observation = env.reset()
             done = [False,False]
@@ -81,6 +84,7 @@ if __name__ == '__main__':
             ep_rewards.append(total_reward)
             episode_reward_mean = sum(ep_rewards) / len(ep_rewards)
             episode_reward_max = max(ep_rewards)
+            writer.writerow(e, total_reward, total_revenue, total_energy_cost, total_storage_cost)
             if verbose:
                 stats = {
                     "episode_reward":        total_reward,

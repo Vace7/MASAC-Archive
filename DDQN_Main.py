@@ -3,6 +3,7 @@ from DDQN import DDQNAgent, ReplayBuffer
 from DDQN_Config import *
 from datetime import datetime
 from collections import deque
+import csv
 
 if __name__ == '__main__':
     env = MultiFactoryEnv()
@@ -21,18 +22,19 @@ if __name__ == '__main__':
         verbose=verbose, 
         name=name)
 
-    for _ in range(20):
-        agent.reset_weights()
-        buffer = ReplayBuffer(
-            obs_dims=len(input_dims),
-            buffer_size=max_size,
-            n_agents=n_agents,
-            batch_size=batch_size,
-            n_actions=n_actions)
-        
-        ep_rewards = deque(maxlen=20)
-        learning_started = False
+    buffer = ReplayBuffer(
+        obs_dims=len(input_dims),
+        buffer_size=max_size,
+        n_agents=n_agents,
+        batch_size=batch_size,
+        n_actions=n_actions)
+    
+    ep_rewards = deque(maxlen=20)
+    learning_started = False
 
+    with open("../tracking/"+name+"_"+datetime.now().strftime('%Y%m%d-%H%M%S')+'.csv') as csv_file:
+        writer = csv.writer(csv_file, delimiter=',')
+        writer.writerow(('Step', 'Reward', 'Revenue', 'Energy Cost', 'Storage Cost'))
         for e in range(n_episodes):
             epsilon*=epsilon_decay
             observation = env.reset()
@@ -68,6 +70,7 @@ if __name__ == '__main__':
             ep_rewards.append(total_reward)
             episode_reward_mean = sum(ep_rewards)/len(ep_rewards)
             episode_reward_max = max(ep_rewards)
+            writer.writerow(e, total_reward, total_revenue, total_energy_cost, total_storage_cost)
             if not load_checkpoint:
                 if verbose:
                     stats = {

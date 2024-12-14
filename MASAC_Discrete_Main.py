@@ -4,6 +4,7 @@ from MASAC_Discrete_Config import *
 from datetime import datetime
 from collections import deque
 import random
+import csv
 
 if __name__ == '__main__':
     env = MultiFactoryEnv()
@@ -25,17 +26,19 @@ if __name__ == '__main__':
         use_layer_norm=use_layer_norm,
         verbose=verbose, 
         name=name)
-    for _ in range(20):
-        agent.reset_weights(autotune, n_actions, n_agents, alpha, lr, actor_hidden_sizes, critic_hidden_sizes, sum(input_dims), use_layer_norm)
-        buffer = MASACReplayBuffer(
-            obs_dims=input_dims,
-            size=max_size,
-            n_agents=n_agents,
-            batch_size=batch_size)
-        
-        ep_rewards = deque(maxlen=20)
-        learning_started = False
+    
+    buffer = MASACReplayBuffer(
+        obs_dims=input_dims,
+        size=max_size,
+        n_agents=n_agents,
+        batch_size=batch_size)
+    
+    ep_rewards = deque(maxlen=20)
+    learning_started = False
 
+    with open("../tracking/"+name+"_"+datetime.now().strftime('%Y%m%d-%H%M%S')+'.csv') as csv_file:
+        writer = csv.writer(csv_file, delimiter=',')
+        writer.writerow(('Step', 'Reward', 'Revenue', 'Energy Cost', 'Storage Cost'))
         for e in range(n_episodes):
             observation = env.reset()
             done = False
@@ -76,6 +79,7 @@ if __name__ == '__main__':
             ep_rewards.append(total_reward)
             episode_reward_mean = sum(ep_rewards)/len(ep_rewards)
             episode_reward_max = max(ep_rewards)
+            writer.writerow(e, total_reward, total_revenue, total_energy_cost, total_storage_cost)
             if not load_checkpoint:
                 if verbose:
                     stats = {
