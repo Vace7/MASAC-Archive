@@ -32,7 +32,7 @@ if __name__ == '__main__':
     ep_rewards = deque(maxlen=20)
     learning_started = False
 
-    with open("../tracking/"+name+"_"+datetime.now().strftime('%Y%m%d-%H%M%S')+'.csv') as csv_file:
+    with open("../tracking/"+name+"_"+datetime.now().strftime('%Y%m%d-%H%M%S')+'.csv', 'w') as csv_file:
         writer = csv.writer(csv_file, delimiter=',')
         writer.writerow(('Step', 'Reward', 'Revenue', 'Energy Cost', 'Storage Cost'))
         for e in range(n_episodes):
