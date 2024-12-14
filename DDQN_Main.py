@@ -70,7 +70,7 @@ if __name__ == '__main__':
             ep_rewards.append(total_reward)
             episode_reward_mean = sum(ep_rewards)/len(ep_rewards)
             episode_reward_max = max(ep_rewards)
-            writer.writerow(e, total_reward, total_revenue, total_energy_cost, total_storage_cost)
+            writer.writerow((e, total_reward, total_revenue, total_energy_cost, total_storage_cost))
             if not load_checkpoint:
                 if verbose:
                     stats = {
